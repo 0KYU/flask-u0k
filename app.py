@@ -203,9 +203,10 @@ def index():
         conn = sqlite3.connect("data/users.db")
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        sql = f"SELECT * FROM users WHERE username LIKE '%{keyword}%' OR email LIKE '%{keyword}%'"
-        logging.info(f"[SEARCH SQL] {sql}")
-        cursor.execute(sql)
+        like_pattern = f"%{keyword}%"
+        sql = "SELECT * FROM users WHERE username LIKE ? OR email LIKE ?"
+        logging.info(f"[SEARCH SQL] {sql} | keyword={keyword}")
+        cursor.execute(sql, (like_pattern, like_pattern))
         search_results = [dict(row) for row in cursor.fetchall()]
         conn.close()
 
@@ -284,9 +285,9 @@ def register():
 
         conn = sqlite3.connect("data/users.db")
         cursor = conn.cursor()
-        sql = f"INSERT INTO users (username, password, email, phone) VALUES ('{username}', '{password}', '{email}', '{phone}')"
-        logging.info(f"[REGISTER SQL] {sql}")
-        cursor.execute(sql)
+        sql = "INSERT INTO users (username, password, email, phone) VALUES (?, ?, ?, ?)"
+        logging.info(f"[REGISTER SQL] {sql} | username={username}")
+        cursor.execute(sql, (username, password, email, phone))
         conn.commit()
         conn.close()
 
@@ -305,9 +306,10 @@ def search():
         conn = sqlite3.connect("data/users.db")
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        sql = f"SELECT * FROM users WHERE username LIKE '%{keyword}%' OR email LIKE '%{keyword}%'"
-        logging.info(f"[SEARCH SQL] {sql}")
-        cursor.execute(sql)
+        like_pattern = f"%{keyword}%"
+        sql = "SELECT * FROM users WHERE username LIKE ? OR email LIKE ?"
+        logging.info(f"[SEARCH SQL] {sql} | keyword={keyword}")
+        cursor.execute(sql, (like_pattern, like_pattern))
         results = [dict(row) for row in cursor.fetchall()]
         conn.close()
     return render_template(

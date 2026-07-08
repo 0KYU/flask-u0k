@@ -35,3 +35,4 @@ test_security.py
 
 # PDF reports (binary files, not suitable for Git)
 *.pdf
+.vs/
