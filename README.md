@@ -1,10 +1,60 @@
 # Flask 用户管理系统 🔐
 
-基于 Flask 框架构建的 Web 用户管理系统，提供登录认证、用户信息展示、会话管理等核心功能。项目已完成 **16 项安全漏洞修复**，达到生产级安全标准。
+基于 Flask 框架构建的 Web 用户管理系统，提供登录认证、用户注册、搜索、会话管理等核心功能。项目经历了**从漏洞百出到逐步加固**的完整安全演进过程。
 
-## ✨ 功能特性
+## 📖 项目演进历程
+
+### 初始版本 — 未检测的原始状态
+
+项目最初是一个基础的 Flask 登录应用，采用最简单的实现方式，存在大量安全隐患，包括：
+
+- 硬编码密钥、明文密码存储、无 CSRF 防护、无速率限制、无安全响应头、无输入校验等共计 **16 项安全漏洞**。
+
+### DAY2 — 安全漏洞全面修复
+
+对初始版本进行了完整的安全审计，逐一修复了全部 **16 项安全漏洞**：
+
+| 严重级别 | 数量 | 典型漏洞 | 修复方案 |
+|----------|------|----------|----------|
+| 🔴 **严重** | 3 | 硬编码密钥、明文密码、Debug 模式外露 | 环境变量密钥 + bcrypt 哈希 + 默认关闭 Debug |
+| 🟠 **高危** | 5 | 密码泄露在响应、Session 固定、CSRF 缺失等 | 前后端脱敏 + Session 重生 + CSRF Token |
+| 🟡 **中危** | 3 | 无速率限制、Session 无超时、GET 登出 | IP 滑动窗口 + 30 分钟超时 + POST 登出 |
+| 🟢 **低危** | 5 | 缺少安全头、输入无校验等 | CSP/X-Frame-Options + 白名单校验 |
+
+> 📄 详细内容见 [DAY2-安全漏洞测试报告.md](DAY2-安全漏洞测试报告.md) 和 [DAY2-安全漏洞修复报告.md](DAY2-安全漏洞修复报告.md)
+
+### DAY3 — 功能扩展与 SQL 注入攻防
+
+在已加固的登录系统基础上，新增了**用户注册**和**用户搜索**功能，引入 SQLite 数据库。新增功能为教学目的使用了不安全的 SQL 拼接方式，随后进行了专项漏洞检测与修复。
+
+#### 新增功能
+
+- **用户注册** (`/register`) — 注册信息写入 SQLite 数据库
+- **用户搜索** (`/`、`/search`) — 按用户名/邮箱模糊搜索
+- **数据库** — SQLite `data/users.db`，启动时自动初始化
+
+#### SQL 注入漏洞检测
+
+对新增接口进行了专项 SQL 注入渗透测试，发现 **2 个高危注入点**：
+
+| 漏洞 | 接口 | 攻击方式 | 危害 |
+|------|------|----------|------|
+| SQL-1 | `/search`、`/` | UNION 联合查询注入 | 提取全部用户密码 + 数据库 Schema |
+| SQL-2 | `/register` | INSERT 语句注入 | 批量创建用户，绕过注册限制 |
+
+#### SQL 注入修复
+
+将 3 处 f-string 字符串拼接 SQL 全部改为 `?` 占位符参数化查询，从根源消除注入风险。
+
+> 📄 详细内容见 [DAY3-SQL注入漏洞测试与修复报告.md](DAY3-SQL注入漏洞测试与修复报告.md)
+
+---
+
+## ✨ 当前功能特性
 
 - **用户登录认证** — Session 机制 + bcrypt 密码哈希验证
+- **用户注册** — SQLite 持久化存储 + 参数化查询防注入
+- **用户搜索** — 按用户名/邮箱模糊搜索，结果显示在首页
 - **用户仪表盘** — 登录后展示个人信息（已脱敏处理）
 - **安全退出** — POST + CSRF Token 双重验证
 - **速率限制** — 5 次 / 5 分钟，防暴力破解
@@ -18,14 +68,13 @@
 | **密码存储** | Werkzeug bcrypt 加盐哈希，永不存储明文 |
 | **密钥管理** | 环境变量注入 + 密码学随机回退 (`secrets.token_hex`) |
 | **CSRF 防护** | Session Token + 恒定时间比较 (`secrets.compare_digest`) |
+| **SQL 注入防护** | `?` 占位符参数化查询，SQL 逻辑与数据分离 |
 | **会话安全** | 登录重生、30 分钟超时、HttpOnly / SameSite=Lax / Secure |
 | **暴力破解** | IP 级别频率限制，5 次 / 5 分钟滑动窗口 |
 | **信息泄露** | 前后端双重防护，不传输/不渲染敏感字段 |
 | **安全响应头** | `X-Frame-Options: DENY`、`CSP`、`X-Content-Type-Options: nosniff` 等 |
 | **输入校验** | 用户名白名单 `[a-zA-Z0-9_-]`、长度限制、可打印字符检查 |
 | **调试保护** | Debug 模式默认关闭，仅绑定 127.0.0.1 |
-
-> 详细修复报告见 [安全漏洞修复报告.md](安全漏洞修复报告.md)
 
 ## 🚀 快速开始
 
@@ -38,8 +87,8 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/YOUR_USERNAME/flask-login-system.git
-cd flask-login-system
+git clone https://github.com/0KYU/flask-u0k.git
+cd flask-u0k
 
 # 2. 安装依赖
 pip install -r requirements.txt
@@ -50,7 +99,7 @@ $env:FLASK_SECRET_KEY = "your-secret-key-here"
 # Linux / macOS:
 export FLASK_SECRET_KEY="your-secret-key-here"
 
-# 4. 启动服务
+# 4. 启动服务（首次启动自动创建 data/users.db）
 python app.py
 ```
 
@@ -58,10 +107,12 @@ python app.py
 
 ### 测试账号
 
-| 用户名 | 密码 | 角色 |
-|--------|------|------|
-| `admin` | `admin123` | 管理员 |
-| `alice` | `alice2025` | 普通用户 |
+| 用户名 | 密码 | 角色 | 来源 |
+|--------|------|------|------|
+| `admin` | `admin123` | 管理员 | 内存字典 (登录) |
+| `alice` | `alice2025` | 普通用户 | 内存字典 (登录) |
+
+> 注册功能创建的用户存储在 SQLite 数据库中，登录认证目前使用内存字典，两者数据源暂未统一。
 
 ## ⚙️ 环境变量
 
@@ -76,27 +127,32 @@ python app.py
 ## 📁 项目结构
 
 ```
-flask-login-system/
-├── app.py                                          # 主应用 (249 行)
-├── requirements.txt                                # Python 依赖
-├── README.md                                       # 项目说明
-├── 安全漏洞测试报告.md                               # 安全测试报告
-├── 安全漏洞修复报告.md                               # 安全修复报告
+flask-u0k/
+├── app.py                      # 主应用 (含登录/注册/搜索/SQLite)
+├── requirements.txt            # Python 依赖
+├── README.md                   # 项目说明
+├── DAY2-安全漏洞测试报告.md      # DAY2 安全测试报告
+├── DAY2-安全漏洞修复报告.md      # DAY2 安全修复报告
+├── DAY3-SQL注入漏洞测试与修复报告.md  # DAY3 SQL注入攻防报告
+├── data/
+│   └── users.db                # SQLite 用户数据库
 ├── templates/
-│   ├── base.html                                   # 基础布局 + 导航栏
-│   ├── login.html                                  # 登录页 (含 CSRF Token)
-│   └── index.html                                  # 仪表盘 (已脱敏)
+│   ├── base.html               # 基础布局 + 导航栏
+│   ├── login.html              # 登录页 (含 CSRF Token)
+│   ├── register.html           # 注册页
+│   └── index.html              # 仪表盘 + 搜索 (已脱敏)
 └── static/
     └── css/
-        └── style.css                               # 样式表
+        └── style.css           # 样式表
 ```
 
 ## 📝 技术栈
 
 - **Web 框架**: Flask 3.x
 - **密码哈希**: Werkzeug Security (bcrypt)
+- **数据库**: SQLite3 (Python 标准库)
 - **会话管理**: Flask Session (服务端签名 Cookie)
-- **Python 标准库**: `secrets`、`logging`、`datetime`、`collections`
+- **Python 标准库**: `sqlite3`、`secrets`、`logging`、`datetime`、`collections`
 
 无第三方安全依赖，全部基于 Flask 内置功能和 Python 标准库实现。
 
@@ -105,8 +161,9 @@ flask-login-system/
 1. **生产环境必须设置 `FLASK_SECRET_KEY`**
 2. 使用 **Gunicorn / Waitress** 替代 Flask 内置服务器
 3. 启用 **HTTPS** + Nginx 反向代理
-4. 将内存用户字典替换为**数据库** (PostgreSQL / MySQL)
+4. 将内存用户字典与 SQLite 登录**统一**为同一数据源
 5. 将内存速率限制替换为 **Redis**
+6. SQLite 数据库密码建议使用 **bcrypt 哈希**存储
 
 ## 📄 开源协议
 
