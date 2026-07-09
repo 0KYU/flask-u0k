@@ -19,6 +19,7 @@
                 <li><span class="info-label">余额：</span>{{ user.balance }}</li>
             </ul>
             <div class="action-bar">
+                <a href="/upload" class="btn btn-primary" style="margin-right: 8px;">上传头像</a>
                 <form action="/logout" method="POST" style="display:inline">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-primary">退出登录</button>

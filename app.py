@@ -45,6 +45,9 @@ app.config["SESSION_COOKIE_SECURE"] = (
 # L2: session timeout — 30 minutes of inactivity
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=30)
 
+# 文件上传大小限制
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
+
 # ---------------------------------------------------------------------------
 # User store — passwords are hashed (C2)
 # ---------------------------------------------------------------------------
@@ -334,6 +337,34 @@ def logout():
     session.clear()
     logging.info("Logout – user=%s ip=%s", username, request.remote_addr)
     return redirect(url_for("index"))
+
+
+@app.route("/upload", methods=["GET", "POST"])
+def upload():
+    """上传头像 — 需要登录才能访问。"""
+    username = session.get("username")
+    if not username:
+        return redirect(url_for("login"))
+
+    if request.method == "POST":
+        if "file" not in request.files:
+            return render_template("upload.html", error="未选择文件。")
+
+        file = request.files["file"]
+        if file.filename == "":
+            return render_template("upload.html", error="未选择文件。")
+
+        upload_dir = os.path.join("static", "uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        filepath = os.path.join(upload_dir, file.filename)
+        file.save(filepath)
+
+        file_url = url_for("static", filename=f"uploads/{file.filename}")
+        logging.info("Upload SUCCESS – user=%s file=%s", username, file.filename)
+        return render_template("upload.html", success=True, file_url=file_url, filename=file.filename)
+
+    return render_template("upload.html")
 
 
 # ---------------------------------------------------------------------------
