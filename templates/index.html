@@ -19,6 +19,7 @@
                 <li><span class="info-label">余额：</span>{{ user.balance }}</li>
             </ul>
             <div class="action-bar">
+                <a href="/profile?user_id={{ session.get('user_id', '') }}" class="btn btn-primary" style="margin-right: 8px;">个人中心</a>
                 <a href="/upload" class="btn btn-primary" style="margin-right: 8px;">上传头像</a>
                 <form action="/logout" method="POST" style="display:inline">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">

@@ -89,16 +89,22 @@ def init_db():
             username TEXT UNIQUE,
             password TEXT,
             email TEXT,
-            phone TEXT
+            phone TEXT,
+            balance REAL DEFAULT 0
         )
     """)
+    # 兼容已存在的数据库：添加 balance 列（如果不存在）
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN balance REAL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass  # 列已存在
     cursor.execute(
-        "INSERT OR IGNORE INTO users (username, password, email, phone) "
-        "VALUES ('admin', 'admin123', 'admin@example.com', '13800138000')"
+        "INSERT OR IGNORE INTO users (username, password, email, phone, balance) "
+        "VALUES ('admin', 'admin123', 'admin@example.com', '13800138000', 99999)"
     )
     cursor.execute(
-        "INSERT OR IGNORE INTO users (username, password, email, phone) "
-        "VALUES ('alice', 'alice2025', 'alice@example.com', '13900139001')"
+        "INSERT OR IGNORE INTO users (username, password, email, phone, balance) "
+        "VALUES ('alice', 'alice2025', 'alice@example.com', '13900139001', 100)"
     )
     conn.commit()
     conn.close()
@@ -265,6 +271,14 @@ def login():
             # H4: prevent session fixation
             session.clear()
             session["username"] = username
+            # 从数据库获取 user_id 存入 session（供导航链接使用）
+            conn = sqlite3.connect("data/users.db")
+            cur = conn.cursor()
+            cur.execute("SELECT id FROM users WHERE username = ?", (username,))
+            row = cur.fetchone()
+            if row:
+                session["user_id"] = row[0]
+            conn.close()
             session.permanent = True  # honour PERMANENT_SESSION_LIFETIME
             _generate_csrf_token()    # fresh token for the new session
             logging.info("Login SUCCESS – user=%s ip=%s", username, client_ip)
@@ -326,6 +340,63 @@ def search():
         keyword=keyword,
         search_results=results,
     )
+
+
+@app.route("/profile")
+def profile():
+    """个人中心 — 根据 URL 参数 user_id 查询任意用户资料（无权限校验）。"""
+    user_id = request.args.get("user_id", "").strip()
+    user = None
+    error = None
+
+    if not user_id:
+        error = "缺少用户 ID 参数。"
+    else:
+        conn = sqlite3.connect("data/users.db")
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, username, email, phone, balance FROM users WHERE id = ?",
+            (user_id,),
+        )
+        row = cursor.fetchone()
+        conn.close()
+        if row:
+            user = dict(row)
+        else:
+            error = f"用户 ID {user_id} 不存在。"
+
+    return render_template(
+        "profile.html",
+        username=session.get("username"),
+        user=user,
+        error=error,
+        user_id=user_id,
+    )
+
+
+@app.route("/recharge", methods=["POST"])
+def recharge():
+    """充值 — 直接修改余额，不做金额正负校验，不做权限检查。"""
+    user_id = request.form.get("user_id", "")
+    amount = float(request.form.get("amount", "0"))
+
+    conn = sqlite3.connect("data/users.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET balance = balance + ? WHERE id = ?",
+        (amount, user_id),
+    )
+    conn.commit()
+    conn.close()
+
+    logging.info(
+        "Recharge – user_id=%s amount=%s",
+        user_id,
+        amount,
+    )
+    flash(f"充值成功！金额：{amount}")
+    return redirect(f"/profile?user_id={user_id}")
 
 
 @app.route("/logout", methods=["POST"])
