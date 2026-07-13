@@ -53,6 +53,9 @@ app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16 MB
 # 允许上传的图片文件后缀
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 
+# 允许加载的页面名称白名单（FI-1修复：第1层防线 — 白名单校验）
+ALLOWED_PAGES = {"help"}
+
 # ---------------------------------------------------------------------------
 # User store — passwords are hashed (C2)
 # ---------------------------------------------------------------------------
@@ -534,6 +537,89 @@ def upload():
         return render_template("upload.html", success=True, file_url=file_url, filename=unique_filename)
 
     return render_template("upload.html")
+
+
+@app.route("/page")
+def page():
+    """Dynamic page loader — reads HTML files from pages/ directory.
+
+    Security (FI-1/FI-2/FI-3 fix — 3-layer defense-in-depth):
+      Layer 1: Page-name whitelist    — only known pages are allowed
+      Layer 2: Path sanitization      — secure_filename strips ../ and separators
+      Layer 3: Directory confinement  — realpath must stay inside pages/ directory
+      Auth gate: login required       — prevents unauthenticated file access (FI-2)
+    """
+    # 认证检查（FI-2修复）：要求登录后才能访问页面
+    if not _require_login():
+        flash("请先登录后再访问页面。")
+        return redirect(url_for("index"))
+
+    name = request.args.get("name", "")
+    page_content = None
+    page_error = None
+
+    if name:
+        # ---------------------------------------------------------------
+        # 第1层防线（FI-1修复）：页面名称白名单校验
+        # 仅允许 ALLOWED_PAGES 集合中的页面名称
+        # ---------------------------------------------------------------
+        # 先尝试剥离 .html 后缀做白名单匹配
+        check_name = name
+        if check_name.endswith(".html"):
+            check_name = check_name[:-5]
+
+        if check_name not in ALLOWED_PAGES:
+            logging.warning(f"[PAGE] Rejected by whitelist — name={name}")
+            page_error = "页面不存在"
+
+        if not page_error:
+            # ---------------------------------------------------------------
+            # 第2层防线（FI-1修复）：路径安全化
+            # 使用 secure_filename 剥离 ../、/、\、.. 等路径分隔符
+            # ---------------------------------------------------------------
+            safe_name = secure_filename(name)
+            if not safe_name.endswith(".html"):
+                safe_name = safe_name + ".html"
+
+            # ---------------------------------------------------------------
+            # 第3层防线（FI-1修复）：目录 confinement
+            # 使用 realpath 解析真实路径，确保结果在 pages/ 目录内
+            # ---------------------------------------------------------------
+            pages_dir = os.path.realpath("pages")
+            filepath = os.path.realpath(os.path.join("pages", safe_name))
+
+            if not filepath.startswith(pages_dir + os.sep):
+                logging.warning(
+                    f"[PAGE] Path traversal blocked — name={name} resolved={filepath}"
+                )
+                page_error = "页面不存在"
+            elif os.path.isfile(filepath):
+                with open(filepath, "r", encoding="utf-8") as f:
+                    page_content = f.read()
+            else:
+                page_error = "页面不存在"
+
+    username = session.get("username")
+    user_info = None
+    if username and username in USERS:
+        u = USERS[username]
+        user_info = {
+            "username": u["username"],
+            "role": u["role"],
+            "email": u["email"],
+            "phone": u["phone"],
+            "balance": u["balance"],
+        }
+
+    return render_template(
+        "index.html",
+        username=username,
+        user=user_info,
+        keyword="",
+        search_results=None,
+        page_content=page_content,
+        page_error=page_error,
+    )
 
 
 # ---------------------------------------------------------------------------

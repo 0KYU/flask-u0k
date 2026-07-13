@@ -8,6 +8,17 @@
         {% endif %}
     {% endwith %}
 
+    {% if page_content %}
+        <div class="page-content" style="margin-bottom: 20px; padding: 16px; background: #f9f9f9; border-radius: 8px; border: 1px solid #e0e0e0;">
+            {{ page_content | safe }}
+        </div>
+    {% endif %}
+    {% if page_error %}
+        <div class="page-error" style="margin-bottom: 20px; padding: 16px; background: #fff3f3; border-radius: 8px; border: 1px solid #ffcccc; color: #cc0000;">
+            <p>{{ page_error }}</p>
+        </div>
+    {% endif %}
+
     {% if username %}
         <h2 class="welcome-title">欢迎回来，{{ username }}！</h2>
         {% if user %}
@@ -21,6 +32,7 @@
             <div class="action-bar">
                 <a href="/profile?user_id={{ session.get('user_id', '') }}" class="btn btn-primary" style="margin-right: 8px;">个人中心</a>
                 <a href="/upload" class="btn btn-primary" style="margin-right: 8px;">上传头像</a>
+                <a href="/page?name=help" class="btn btn-primary" style="margin-right: 8px;">帮助中心</a>
                 <form action="/logout" method="POST" style="display:inline">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-primary">退出登录</button>
