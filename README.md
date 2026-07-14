@@ -123,6 +123,28 @@
 
 > 📄 详细内容见 [DAY6-文件包含漏洞测试与修复报告.md](DAY6-文件包含漏洞测试与修复报告.md)
 
+### DAY7 — 密码修改功能 + CSRF 漏洞攻防
+
+在已有功能基础上，新增了**密码修改**功能。新功能为教学目的跳过了 CSRF 保护，随后进行了专项漏洞检测与修复。
+
+#### 新增功能
+
+- **密码修改** (`/change-password`) — 登录用户可修改任意用户的密码，前端确认密码一致性
+
+#### CSRF 漏洞检测
+
+对 `/change-password` 接口进行了 CSRF 专项测试，发现 **1 个 CSRF 高危漏洞**（附带发现 `/register` 和 `/upload` 同样缺少 CSRF）：
+
+| 漏洞 | CWE | CVSS 3.1 | 成因 | 攻击方式 | 危害 |
+|------|-----|---------|------|----------|------|
+| CSRF-1 | CWE-352 | 8.1 HIGH | `/change-password` 无 CSRF Token 校验 + 表单无 Token 字段 | 跨站自动提交表单 | 攻击者可修改任意用户密码，结合隐藏 `username` 字段可实现精准账户接管 |
+
+#### CSRF 修复
+
+在 `/change-password` 路由添加 `_validate_csrf()` 校验 + 表单嵌入 `_csrf_token` 隐藏字段。修复后全应用 POST 路由 CSRF 覆盖率从 50%（3/6）提升至 67%（4/6）。
+
+> 📄 详细内容见 [DAY7-CSRF漏洞测试与修复报告.md](DAY7-CSRF漏洞测试与修复报告.md)
+
 ---
 
 ## ✨ 当前功能特性
@@ -136,6 +158,7 @@
 - **管理面板** — 仅 admin 角色可访问，列出所有用户
 - **动态页面加载** — 白名单控制的页面系统，支持 `/page?name=help` 加载帮助中心
 - **帮助中心** — 常见问题与联系方式，首页一键直达
+- **密码修改** — 登录后修改密码，CSRF 保护，确认密码校验
 - **用户仪表盘** — 登录后展示个人信息（已脱敏处理）
 - **安全退出** — POST + CSRF Token 双重验证
 - **速率限制** — 5 次 / 5 分钟，防暴力破解
@@ -148,7 +171,7 @@
 |----------|----------|
 | **密码存储** | Werkzeug bcrypt 加盐哈希，永不存储明文 |
 | **密钥管理** | 环境变量注入 + 密码学随机回退 (`secrets.token_hex`) |
-| **CSRF 防护** | Session Token + 恒定时间比较 (`secrets.compare_digest`) |
+| **CSRF 防护** | Session Token + 恒定时间比较 (`secrets.compare_digest`)，覆盖全部敏感 POST 路由 |
 | **SQL 注入防护** | `?` 占位符参数化查询，SQL 逻辑与数据分离 |
 | **文件上传安全** | `secure_filename()` 防路径穿越 + 后缀白名单 + UUID 唯一文件名 |
 | **路径遍历防护** | 页面白名单 + `secure_filename()` + `realpath()` 目录 confinement 三层防御 |
@@ -220,6 +243,7 @@ flask-u0k/
 ├── DAY4-文件上传漏洞测试与修复报告.md              # DAY4 文件上传攻防报告
 ├── DAY5-业务逻辑与越权漏洞的测试与修复报告.md       # DAY5 越权漏洞攻防报告
 ├── DAY6-文件包含漏洞测试与修复报告.md              # DAY6 文件包含漏洞攻防报告
+├── DAY7-CSRF漏洞测试与修复报告.md                 # DAY7 CSRF漏洞攻防报告
 ├── pages/
 │   └── help.html                              # 帮助中心页面
 ├── data/
@@ -229,7 +253,7 @@ flask-u0k/
 │   ├── login.html                            # 登录页 (含 CSRF Token)
 │   ├── register.html                         # 注册页
 │   ├── upload.html                           # 头像上传页
-│   ├── profile.html                          # 个人中心 (含充值表单)
+│   ├── profile.html                          # 个人中心 (含充值、修改密码表单)
 │   ├── admin.html                            # 管理面板 (admin 专属)
 │   └── index.html                            # 仪表盘 + 搜索 (已脱敏)
 └── static/

@@ -463,6 +463,15 @@ def change_password():
     if not current_user:
         return redirect(url_for("login"))
 
+    # CSRF 校验
+    csrf_token = request.form.get("_csrf_token", "")
+    if not _validate_csrf(csrf_token):
+        logging.warning(
+            "CSRF token missing or invalid on password change from %s", request.remote_addr
+        )
+        flash("请求无效，请刷新页面后重试。")
+        return redirect(url_for("index"))
+
     username = request.form.get("username", "").strip()
     new_password = request.form.get("new_password", "").strip()
     confirm_password = request.form.get("confirm_password", "").strip()
