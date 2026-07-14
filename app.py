@@ -456,6 +456,44 @@ def recharge():
     return redirect(f"/profile?user_id={user_id}")
 
 
+@app.route("/change-password", methods=["POST"])
+def change_password():
+    """修改密码 — 需登录，无需原密码验证，无需 CSRF。"""
+    current_user = _require_login()
+    if not current_user:
+        return redirect(url_for("login"))
+
+    username = request.form.get("username", "").strip()
+    new_password = request.form.get("new_password", "").strip()
+    confirm_password = request.form.get("confirm_password", "").strip()
+
+    # 基本校验
+    if not username or not new_password:
+        flash("用户名和新密码不能为空。")
+        return redirect(url_for("profile"))
+
+    if new_password != confirm_password:
+        flash("两次输入的密码不一致。")
+        return redirect(url_for("profile"))
+
+    conn = sqlite3.connect("data/users.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "UPDATE users SET password = ? WHERE username = ?",
+        (new_password, username),
+    )
+    conn.commit()
+    conn.close()
+
+    logging.info(
+        "Password changed – username=%s by=%s",
+        username,
+        session.get("username"),
+    )
+    flash(f"用户 {username} 的密码修改成功！")
+    return redirect(url_for("profile"))
+
+
 @app.route("/admin")
 def admin_panel():
     """管理面板 — 仅 admin 角色可访问，列出所有用户。"""
