@@ -78,6 +78,28 @@
                 {% endif %}
             {% endif %}
         </div>
+
+        <!-- URL 抓取功能 -->
+        <div class="fetch-section" style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #eee;">
+            <h3 style="margin-bottom: 12px;">URL 抓取</h3>
+            <form method="POST" action="/fetch-url" class="search-form" style="display: flex; gap: 8px;">
+                <input type="text" name="url" placeholder="输入 URL（支持 http://、file:// 等）..." value="{{ fetch_url or '' }}" style="flex: 1;">
+                <button type="submit" class="btn btn-primary">抓取</button>
+            </form>
+
+            {% if fetch_result %}
+                <div style="margin-top: 16px;">
+                    <p style="margin-bottom: 8px; color: #666;">状态码: {{ fetch_status }}</p>
+                    <pre style="background: #f4f4f4; border: 1px solid #ddd; border-radius: 6px; padding: 12px; font-size: 13px; max-height: 400px; overflow: auto; white-space: pre-wrap; word-break: break-all;">{{ fetch_result }}</pre>
+                </div>
+            {% endif %}
+            {% if fetch_error %}
+                <div style="margin-top: 16px; padding: 12px; background: #fff3f3; border-radius: 6px; border: 1px solid #ffcccc;">
+                    <p style="color: #cc0000; margin: 0;">{{ fetch_error }}</p>
+                </div>
+            {% endif %}
+        </div>
+
     {% else %}
         <h2 class="welcome-title">请先登录</h2>
         <p class="info-text">您需要登录后才能访问系统。</p>

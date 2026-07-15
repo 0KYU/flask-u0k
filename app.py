@@ -5,6 +5,8 @@ import secrets
 import time
 import uuid
 from collections import defaultdict
+import urllib.request
+import urllib.error
 from datetime import timedelta
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
@@ -501,6 +503,46 @@ def change_password():
     )
     flash(f"用户 {username} 的密码修改成功！")
     return redirect(url_for("profile"))
+
+
+@app.route("/fetch-url", methods=["POST"])
+def fetch_url():
+    """URL 抓取 — 需登录，不对 URL 做任何限制（SSRF 教学用途）。"""
+    current_user = _require_login()
+    if not current_user:
+        return redirect(url_for("login"))
+
+    url = request.form.get("url", "").strip()
+    if not url:
+        flash("请输入要抓取的 URL。")
+        return redirect(url_for("index"))
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Flask-Fetcher/1.0"})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            status_code = response.status
+            body = response.read().decode("utf-8", errors="replace")[:5000]
+        return render_template(
+            "index.html",
+            username=session.get("username"),
+            fetch_url=url,
+            fetch_status=status_code,
+            fetch_result=body,
+        )
+    except urllib.error.URLError as e:
+        return render_template(
+            "index.html",
+            username=session.get("username"),
+            fetch_url=url,
+            fetch_error=f"网络错误: {e.reason}",
+        )
+    except Exception as e:
+        return render_template(
+            "index.html",
+            username=session.get("username"),
+            fetch_url=url,
+            fetch_error=f"抓取失败: {str(e)}",
+        )
 
 
 @app.route("/admin")
