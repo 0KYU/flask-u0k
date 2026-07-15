@@ -7,6 +7,9 @@ import uuid
 from collections import defaultdict
 import urllib.request
 import urllib.error
+import urllib.parse
+import ipaddress
+import socket
 from datetime import timedelta
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
@@ -207,6 +210,59 @@ def _require_login():
     if not username or username not in USERS:
         return None
     return USERS[username]
+
+
+def _is_ssrf_safe(url):
+    """SSRF 防护：校验 URL 方案 + 解析 DNS 并阻止内网 IP。
+    返回 (is_safe, error_message)。
+    """
+    # 第1层：URL 解析
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception:
+        return False, "无法解析 URL。"
+
+    # 第2层：协议白名单（仅允许 http/https）
+    if parsed.scheme not in ("http", "https"):
+        return False, f"不支持的协议: {parsed.scheme}。仅允许 http/https。"
+
+    # 第3层：提取主机名
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "无法从 URL 中提取主机名。"
+
+    # 第4层：阻止 localhost 别名
+    if hostname.lower() in ("localhost", "127.0.0.1", "0.0.0.0", "[::1]", "::1"):
+        return False, "不允许访问本地回环地址。"
+
+    # 第5层：DNS 解析 + IP 过滤
+    try:
+        addr_info = socket.getaddrinfo(hostname, None)
+    except socket.gaierror:
+        return False, f"无法解析主机名: {hostname}。"
+    except Exception as e:
+        return False, f"DNS 解析失败: {e}。"
+
+    # 提取所有解析到的 IP
+    resolved_ips = set()
+    for info in addr_info:
+        addr = info[4][0]
+        resolved_ips.add(addr)
+
+    # 第6层：IP 地址黑白名单
+    for addr in resolved_ips:
+        try:
+            ip_obj = ipaddress.ip_address(addr)
+        except ValueError:
+            continue
+        if ip_obj.is_loopback:
+            return False, f"不允许访问回环地址: {addr}。"
+        if ip_obj.is_private:
+            return False, f"不允许访问内网地址: {addr}。"
+        if ip_obj.is_link_local:
+            return False, f"不允许访问链路本地地址: {addr}。"
+
+    return True, None
 
 
 # ---------------------------------------------------------------------------
@@ -516,6 +572,20 @@ def fetch_url():
     if not url:
         flash("请输入要抓取的 URL。")
         return redirect(url_for("index"))
+
+    # SSRF 防护
+    safe, ssrf_error = _is_ssrf_safe(url)
+    if not safe:
+        logging.warning(
+            "SSRF blocked – url=%s reason=%s from=%s",
+            url, ssrf_error, request.remote_addr,
+        )
+        return render_template(
+            "index.html",
+            username=session.get("username"),
+            fetch_url=url,
+            fetch_error=ssrf_error,
+        )
 
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Flask-Fetcher/1.0"})

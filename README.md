@@ -145,6 +145,30 @@
 
 > 📄 详细内容见 [DAY7-CSRF漏洞测试与修复报告.md](DAY7-CSRF漏洞测试与修复报告.md)
 
+### DAY8 — URL 抓取功能 + SSRF 漏洞攻防
+
+在已有功能基础上，新增了**URL 抓取**功能。新功能为教学目的跳过了所有 URL 校验，随后进行了专项 SSRF 漏洞检测与修复。
+
+#### 新增功能
+
+- **URL 抓取** (`/fetch-url`) — 登录用户可提交 URL，服务端代理抓取并回显内容（前 5000 字符）
+
+#### SSRF 漏洞检测
+
+对 `/fetch-url` 接口进行了 SSRF 专项测试，发现 **3 个高危 SSRF 漏洞**：
+
+| 漏洞 | CWE | CVSS 3.1 | 成因 | 攻击方式 | 危害 |
+|------|-----|---------|------|----------|------|
+| SSRF-1 | CWE-918 | 8.6 HIGH | 无协议限制 | `file:///etc/passwd` | 读取服务器任意本地文件（含源码、数据库） |
+| SSRF-2 | CWE-918 | 8.1 HIGH | 无内网 IP 过滤 | `http://127.0.0.1:5000/admin` | 绕过 ACL 访问内网管理面板 |
+| SSRF-3 | CWE-918 | 7.5 HIGH | DNS 解析无 IP 验证 | DNS rebinding + 云元数据 | 获取云环境临时凭证（IAM/STS） |
+
+#### SSRF 修复
+
+实施六层纵深防御：URL 解析 → 协议白名单 → 主机名提取 → localhost 黑名单 → DNS 解析 → IP 地址过滤（阻止 loopback/private/link-local）。
+
+> 📄 详细内容见 [DAY8-SSRF漏洞测试与修复报告.md](DAY8-SSRF漏洞测试与修复报告.md)
+
 ---
 
 ## ✨ 当前功能特性
@@ -159,6 +183,7 @@
 - **动态页面加载** — 白名单控制的页面系统，支持 `/page?name=help` 加载帮助中心
 - **帮助中心** — 常见问题与联系方式，首页一键直达
 - **密码修改** — 登录后修改密码，CSRF 保护，确认密码校验
+- **URL 抓取** — 登录后抓取外部 URL，6 层 SSRF 防护（协议+IP+DNS）
 - **用户仪表盘** — 登录后展示个人信息（已脱敏处理）
 - **安全退出** — POST + CSRF Token 双重验证
 - **速率限制** — 5 次 / 5 分钟，防暴力破解
@@ -174,6 +199,7 @@
 | **CSRF 防护** | Session Token + 恒定时间比较 (`secrets.compare_digest`)，覆盖全部敏感 POST 路由 |
 | **SQL 注入防护** | `?` 占位符参数化查询，SQL 逻辑与数据分离 |
 | **文件上传安全** | `secure_filename()` 防路径穿越 + 后缀白名单 + UUID 唯一文件名 |
+| **SSRF 防护** | 六层防御：URL 解析 + 协议白名单 + 主机名黑名单 + DNS 解析 + IP 过滤 (loopback/private/link-local) |
 | **路径遍历防护** | 页面白名单 + `secure_filename()` + `realpath()` 目录 confinement 三层防御 |
 | **访问控制** | IDOR 防护（session user_id 验证）+ RBAC 角色校验（admin/user）+ 认证守卫 |
 | **输入校验** | 用户名白名单 `[a-zA-Z0-9_-]` + 金额范围校验 + 类型校验 |
@@ -244,6 +270,7 @@ flask-u0k/
 ├── DAY5-业务逻辑与越权漏洞的测试与修复报告.md       # DAY5 越权漏洞攻防报告
 ├── DAY6-文件包含漏洞测试与修复报告.md              # DAY6 文件包含漏洞攻防报告
 ├── DAY7-CSRF漏洞测试与修复报告.md                 # DAY7 CSRF漏洞攻防报告
+├── DAY8-SSRF漏洞测试与修复报告.md                 # DAY8 SSRF漏洞攻防报告
 ├── pages/
 │   └── help.html                              # 帮助中心页面
 ├── data/
@@ -255,7 +282,7 @@ flask-u0k/
 │   ├── upload.html                           # 头像上传页
 │   ├── profile.html                          # 个人中心 (含充值、修改密码表单)
 │   ├── admin.html                            # 管理面板 (admin 专属)
-│   └── index.html                            # 仪表盘 + 搜索 (已脱敏)
+│   └── index.html                            # 仪表盘 + 搜索 + URL抓取 (已脱敏)
 └── static/
     ├── css/
     │   └── style.css                         # 样式表
