@@ -10,6 +10,7 @@ import urllib.error
 import urllib.parse
 import ipaddress
 import socket
+import re
 import subprocess
 import platform
 from datetime import timedelta
@@ -263,6 +264,28 @@ def _is_ssrf_safe(url):
             return False, f"不允许访问内网地址: {addr}。"
         if ip_obj.is_link_local:
             return False, f"不允许访问链路本地地址: {addr}。"
+
+    return True, None
+
+
+def _is_safe_ping_target(target):
+    """命令注入防护：校验 ping 目标是否为合法的 IP 或主机名。
+    返回 (is_safe, error_message)。
+    """
+    if not target or len(target) > 253:
+        return False, "目标为空或长度超过 253 字符。"
+
+    # 白名单正则：IPv4、简单主机名/域名（字母数字+连字符+点）
+    # 单字符主机名、IPv6（含冒号和方括号）
+    pattern = r'^[a-zA-Z0-9][-a-zA-Z0-9.:\[\]]*[a-zA-Z0-9]$|^[a-zA-Z0-9]$|^[a-fA-F0-9:]+$'
+    if not re.match(pattern, target):
+        return False, f"目标格式不合法: {target}"
+
+    # 额外检查：拒绝所有常见的 shell 元字符和命令分隔符
+    dangerous = {';', '&&', '||', '|', '&', '$', '`', '(', ')', '{', '}', '#', '!', '<', '>', '\n', '\r', '\t', "'", '"', '\\'}
+    for char in dangerous:
+        if char in target:
+            return False, f"目标包含非法字符: {char}"
 
     return True, None
 
@@ -627,6 +650,11 @@ def ping_test():
     if request.method == "GET":
         return render_template("ping.html", username=session.get("username"))
 
+    # CSRF 保护
+    if not _validate_csrf(request.form.get("_csrf_token", "")):
+        flash("请求无效，请刷新页面后重试。")
+        return redirect(url_for("ping_test"))
+
     # POST: 执行 ping 命令
     ip = request.form.get("ip", "").strip()
     if not ip:
@@ -636,12 +664,25 @@ def ping_test():
             ping_error="请输入 IP 地址或域名。",
         )
 
+    # 命令注入防护：校验目标地址
+    safe, safe_error = _is_safe_ping_target(ip)
+    if not safe:
+        logging.warning(
+            "Ping command injection blocked – target=%s reason=%s from=%s",
+            ip, safe_error, request.remote_addr,
+        )
+        return render_template(
+            "ping.html",
+            username=session.get("username"),
+            ping_ip=ip,
+            ping_error=safe_error,
+        )
+
     # 根据操作系统选择 ping 参数
     param = "-n" if platform.system().lower() == "windows" else "-c"
-    cmd = f"ping {param} 3 {ip}"
 
     try:
-        output = subprocess.check_output(cmd, shell=True, timeout=30, stderr=subprocess.STDOUT)
+        output = subprocess.check_output(["ping", param, "3", ip], shell=False, timeout=30, stderr=subprocess.STDOUT)
         result = output.decode("utf-8", errors="replace")
         return render_template(
             "ping.html",

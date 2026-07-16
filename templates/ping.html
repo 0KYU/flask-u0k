@@ -10,6 +10,7 @@
             <label for="ip">目标地址</label>
             <input type="text" id="ip" name="ip" placeholder="例如：127.0.0.1、localhost、8.8.8.8" value="{{ ping_ip or '' }}">
         </div>
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-primary btn-block">Ping</button>
     </form>
 
