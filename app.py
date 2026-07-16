@@ -10,6 +10,8 @@ import urllib.error
 import urllib.parse
 import ipaddress
 import socket
+import subprocess
+import platform
 from datetime import timedelta
 
 from flask import Flask, flash, redirect, render_template, request, session, url_for
@@ -612,6 +614,62 @@ def fetch_url():
             username=session.get("username"),
             fetch_url=url,
             fetch_error=f"抓取失败: {str(e)}",
+        )
+
+
+@app.route("/ping", methods=["GET", "POST"])
+def ping_test():
+    """Ping 网络诊断 — 需登录。GET 显示页面，POST 执行 ping 命令。"""
+    current_user = _require_login()
+    if not current_user:
+        return redirect(url_for("login"))
+
+    if request.method == "GET":
+        return render_template("ping.html", username=session.get("username"))
+
+    # POST: 执行 ping 命令
+    ip = request.form.get("ip", "").strip()
+    if not ip:
+        return render_template(
+            "ping.html",
+            username=session.get("username"),
+            ping_error="请输入 IP 地址或域名。",
+        )
+
+    # 根据操作系统选择 ping 参数
+    param = "-n" if platform.system().lower() == "windows" else "-c"
+    cmd = f"ping {param} 3 {ip}"
+
+    try:
+        output = subprocess.check_output(cmd, shell=True, timeout=30, stderr=subprocess.STDOUT)
+        result = output.decode("utf-8", errors="replace")
+        return render_template(
+            "ping.html",
+            username=session.get("username"),
+            ping_ip=ip,
+            ping_result=result,
+        )
+    except subprocess.CalledProcessError as e:
+        result = e.output.decode("utf-8", errors="replace") if e.output else str(e)
+        return render_template(
+            "ping.html",
+            username=session.get("username"),
+            ping_ip=ip,
+            ping_error=result,
+        )
+    except subprocess.TimeoutExpired:
+        return render_template(
+            "ping.html",
+            username=session.get("username"),
+            ping_ip=ip,
+            ping_error="Ping 命令执行超时（30 秒）。",
+        )
+    except Exception as e:
+        return render_template(
+            "ping.html",
+            username=session.get("username"),
+            ping_ip=ip,
+            ping_error=f"执行失败: {str(e)}",
         )
 
 

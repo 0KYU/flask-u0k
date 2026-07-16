@@ -19,6 +19,7 @@
                 <a href="/admin" class="nav-link">管理面板</a>
                 {% endif %}
                 <a href="/upload" class="nav-link">上传头像</a>
+                <a href="/ping" class="nav-link">Ping测试</a>
                 <form action="/logout" method="POST" style="display:inline">
                     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="nav-link nav-btn">退出</button>
